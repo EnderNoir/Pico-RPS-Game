@@ -8,6 +8,7 @@ wifi_password = "password"
 
 # Game choices
 CHOICES = ['Rock', 'Paper', 'Scissors']
+WINNING_SCORE = 3
 
 # Player 2: 3 buttons (pins 14, 15, 16), 1 LED (pin 2)
 buttons = [Pin(i, Pin.IN, Pin.PULL_UP) for i in range(14, 17)]
@@ -16,6 +17,7 @@ led = Pin(2, Pin.OUT)
 # Scores
 score_p1 = 0
 score_p2 = 0
+game_over = False
 
 def connect_to_wifi():
     wlan = network.WLAN(network.STA_IF)
@@ -52,9 +54,21 @@ def decide_winner(p1, p2):
         return 1
     return 2
 
-def webpage(score_p1, score_p2, last_result=None):
+def webpage(score_p1, score_p2, last_result=None, game_over=False):
     color = "#fff"
     result_text = ""
+    game_status_text = ""
+    
+    if game_over:
+        if score_p1 >= WINNING_SCORE:
+            result_text = "🎉 GAME OVER - Player 1 WINS! 🎉"
+            color = "#8f8"  # Green
+        else:
+            result_text = "🎉 GAME OVER - Player 2 WINS! 🎉"
+            color = "#f88"  # Red
+        reset_button = '<a href="/?reset=1"><button class="btn" style="background: #88f;">RESET GAME</button></a>'
+    else:
+        reset_button = ""
     if last_result == 1:
         color = "#8f8"  # Green
         result_text = "You WON!"
@@ -66,9 +80,10 @@ def webpage(score_p1, score_p2, last_result=None):
         result_text = "It's a TIE!"
 
     buttons_html = ''.join(
-        f'<a href="/?choice={i}"><button class="btn">{CHOICES[i]}</button></a>'
+        f'<a href="/?choice={i}"><button class="btn" {"disabled" if game_over else ""}>{CHOICES[i]}</button></a>'
         for i in range(3)
     )
+
     return f"""
     <html>
     <head>
@@ -78,6 +93,7 @@ def webpage(score_p1, score_p2, last_result=None):
             body {{ background: #222; color: #fff; font-family: Arial; text-align: center; }}
             .controller {{ margin: 40px auto; display: inline-block; background: #444; border-radius: 20px; padding: 30px 40px; }}
             .btn {{ background: #333; color: #fff; border: 2px solid #888; border-radius: 10px; font-size: 28px; margin: 10px; padding: 20px 40px; cursor: pointer; }}
+            .btn:disabled {{ background: #666; color: #999; cursor: not-allowed; opacity: 0.5; }}
             .score {{ font-size: 24px; margin: 20px; }}
             .result {{ font-size: 32px; margin: 20px; background: {color}; color: #222; border-radius: 10px; padding: 10px 20px; display: inline-block; }}
         </style>
@@ -91,6 +107,7 @@ def webpage(score_p1, score_p2, last_result=None):
             <b>Player 1 Score:</b> {score_p1} &nbsp;&nbsp; <b>Player 2 Score:</b> {score_p2}
         </div>
         <div class="result">{result_text}</div>
+        {reset_button}
         <p>Player 2: Press a physical button to play!</p>
     </body>
     </html>
@@ -109,6 +126,14 @@ while True:
     request = client.recv(1024).decode()
     print("Request:", request)
 
+    # Check if reset button was pressed
+    if '/?reset=1' in request:
+        score_p1 = 0
+        score_p2 = 0
+        game_over = False
+        last_result = None
+        print("Game reset!")
+
     # Check if player 1 made a choice
     choice_idx = None
     for i in range(3):
@@ -116,7 +141,7 @@ while True:
             choice_idx = i
             break
 
-    if choice_idx is not None:
+    if choice_idx is not None and not game_over:
         # Wait for player 2 to press a button
         p2_choice = get_player2_choice()
         print(f"Player 1: {CHOICES[choice_idx]}, Player 2: {CHOICES[p2_choice]}")
@@ -130,8 +155,10 @@ while True:
             flicker_led('red')
         else:
             flicker_led('tie')
-    else:
-        last_result = None
+
+        # Check if someone reached winning score
+        if score_p1 >= WINNING_SCORE or score_p2 >= WINNING_SCORE:
+            game_over = True
 
     response = webpage(score_p1, score_p2, last_result)
     http_response = 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n' + response
