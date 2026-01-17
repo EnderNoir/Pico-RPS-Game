@@ -3,8 +3,8 @@ import socket
 from machine import Pin
 import time
 
-wifi_name = "POCO X3 Pro"
-wifi_password = "ewankosayo0"
+wifi_name = "name"
+wifi_password = "password"
 
 # Game choices
 CHOICES = ['Rock', 'Paper', 'Scissors']
